@@ -81,7 +81,7 @@ int MessageCount = 0;
 
 int ButtonTime = 0;
 uint8_t Bounce = 0;
-int LedPeriod = 500;
+
 
 /* USER CODE END 0 */
 
@@ -416,6 +416,9 @@ void EXTI0_1_IRQHandler(void)
   		HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
 
   	}
+
+  	ButtonTime = HAL_GetTick();
+  	Bounce = 1;
 
 
   /* USER CODE BEGIN EXTI0_1_IRQn 1 */
