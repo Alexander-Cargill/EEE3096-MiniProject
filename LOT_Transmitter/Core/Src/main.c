@@ -31,6 +31,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define ADC_SAMPLE 1
+#define NO_CHANGE 2
+#define CHECKPOINT 3
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -57,7 +62,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void EXTI0_1_IRQHandler(void);
-
+void TIM3_IRQHandler(void);
 uint32_t pollADC(void);
 /* USER CODE END PFP */
 
@@ -68,6 +73,9 @@ uint32_t pollADC(void);
 
 uint8_t buffer[64];
 
+uint8_t MessageIndex = 0;
+uint8_t MessageType = ADC_SAMPLE;
+uint8_t Message[12];
 
 int ButtonTime = 0;
 uint8_t Bounce = 0;
@@ -234,7 +242,7 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler = 4799;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -332,6 +340,21 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void TIM3_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM3_IRQn 0 */
+
+  /* USER CODE END TIM3_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim3);
+
+
+
+  /* USER CODE BEGIN TIM3_IRQn 1 */
+
+  /* USER CODE END TIM3_IRQn 1 */
+}
+
+
 void EXTI0_1_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI0_1_IRQn 0 */
@@ -347,7 +370,37 @@ void EXTI0_1_IRQHandler(void)
   	if(Bounce == 0)
   	{
   		int val = pollADC();
-  		sprintf(buffer, "%d\n", val);
+  		sprintf(buffer, "Sensor Reading %d\n", val);
+  		HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
+
+
+  		MessageIndex = 1;
+  		Message[0] = 1;		// Start Bit
+
+  		if(MessageType == ADC_SAMPLE)
+  		{
+  			Message[1] = '0'; // using chars for UART not the best method.
+  			Message[2] = '0';
+  		}
+  		else if(MessageType == NO_CHANGE)
+  		{
+  			Message[1] = 0;
+  			Message[2] = 1;
+  		}
+  		else if(MessageType == CHECKPOINT)
+  		{
+  			Message[1] = 1;
+  			Message[2] = 0;
+  		}
+
+  		for(int i = 10; i > 2; i--)
+  		{
+  			Message[i] = (char) val%2;
+  			val = val/2;
+  		}
+  		Message[11] = '\0'; // Terminating character
+
+  		sprintf(buffer, "Encoded Message %s\n", Message);
   		HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
 
   	}

@@ -55,6 +55,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern TIM_HandleTypeDef htim3;
 extern UART_HandleTypeDef huart2;
 /* USER CODE BEGIN EV */
 
@@ -143,7 +144,9 @@ void SysTick_Handler(void)
 /**
   * @brief This function handles EXTI line 0 and 1 interrupts.
   */
-
+/**
+  * @brief This function handles TIM3 global interrupt.
+  */
 
 /**
   * @brief This function handles USART2 global interrupt.
