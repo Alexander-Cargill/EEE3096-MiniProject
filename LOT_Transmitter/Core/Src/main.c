@@ -374,7 +374,7 @@ void EXTI0_1_IRQHandler(void)
   		HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
 
 
-  		MessageIndex = 1;
+  		MessageIndex = 0;
   		Message[0] = 1;		// Start Bit
 
   		if(MessageType == ADC_SAMPLE)
@@ -395,7 +395,7 @@ void EXTI0_1_IRQHandler(void)
 
   		for(int i = 10; i > 2; i--)
   		{
-  			Message[i] = (char) val%2;
+  			Message[i] = (char) (val%2+48);
   			val = val/2;
   		}
   		Message[11] = '\0'; // Terminating character
