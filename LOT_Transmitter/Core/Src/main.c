@@ -77,6 +77,8 @@ uint8_t MessageIndex = 0;
 uint8_t MessageType = ADC_SAMPLE;
 uint8_t Message[12];
 
+int MessageCount = 0;
+
 int ButtonTime = 0;
 uint8_t Bounce = 0;
 int LedPeriod = 500;
@@ -317,12 +319,22 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, LD4_Pin|LD3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PA0 */
   GPIO_InitStruct.Pin = GPIO_PIN_0;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD4_Pin LD3_Pin */
@@ -347,7 +359,7 @@ void TIM3_IRQHandler(void)
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
 
-
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, Message[MessageIndex]);
 
   /* USER CODE BEGIN TIM3_IRQn 1 */
 
@@ -375,7 +387,7 @@ void EXTI0_1_IRQHandler(void)
 
 
   		MessageIndex = 0;
-  		Message[0] = 1;		// Start Bit
+  		Message[0] = '1';		// Start Bit
 
   		if(MessageType == ADC_SAMPLE)
   		{

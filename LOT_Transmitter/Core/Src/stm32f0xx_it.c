@@ -144,6 +144,8 @@ void SysTick_Handler(void)
 /**
   * @brief This function handles EXTI line 0 and 1 interrupts.
   */
+
+
 /**
   * @brief This function handles TIM3 global interrupt.
   */
