@@ -18,7 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stdio.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -36,6 +36,8 @@
 #define NO_CHANGE 2
 #define CHECKPOINT 3
 
+#define BAUD_RATE 2
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,7 +46,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- ADC_HandleTypeDef hadc;
+ADC_HandleTypeDef hadc;
 
 TIM_HandleTypeDef htim3;
 
@@ -77,11 +79,13 @@ uint8_t MessageIndex = 0;
 uint8_t MessageType = ADC_SAMPLE;
 uint8_t Message[12];
 
-int MessageCount = 0;
+int MessageCount = 0; //Counts the number of messages/ samples
+uint8_t LastMessageVal=0;
 
 int ButtonTime = 0;
 uint8_t Bounce = 0;
 
+uint16_t ARR = (10000/BAUD_RATE) - 1;
 
 /* USER CODE END 0 */
 
@@ -212,7 +216,7 @@ static void MX_ADC_Init(void)
 
   /** Configure for the selected ADC regular channel to be converted.
   */
-  sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Channel = ADC_CHANNEL_4;
   sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
   sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
@@ -246,7 +250,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 4799;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = ARR;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -286,7 +290,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 38400;
+  huart2.Init.BaudRate = 9600;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -333,7 +337,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : PA7 */
   GPIO_InitStruct.Pin = GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -356,16 +360,22 @@ void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
 
-  /* USER CODE END TIM3_IRQn 0 */
+
   HAL_TIM_IRQHandler(&htim3);
+  //Stops the timer and the interruppt
+  SendData();
 
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, Message[MessageIndex]);
+  //Send data to a GPIO pin
 
-  /* USER CODE BEGIN TIM3_IRQn 1 */
+
+
+
+
+/* USER CODE END TIM3_IRQn 0 */
+/* USER CODE BEGIN TIM3_IRQn 1 */
 
   /* USER CODE END TIM3_IRQn 1 */
 }
-
 
 void EXTI0_1_IRQHandler(void)
 {
@@ -381,18 +391,27 @@ void EXTI0_1_IRQHandler(void)
 
   	if(Bounce == 0)
   	{
+  		MessageCount++;  //Increment the number of messages sent
+
   		int val = pollADC();
-  		sprintf(buffer, "Sensor Reading %d\n", val);
+
+  		sprintf(buffer, "Sensor Reading %d\n\r", val);
   		HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
 
 
   		MessageIndex = 0;
-  		Message[0] = '1';		// Start Bit
+  		Message[0] = 1;		// Start Bit
+
+  		MessageType = CheckMessageType(val); // Call the function to check the message type
+  					// Set the last message val to the current value
+  		LastMessageVal = val;
+  		sprintf(buffer, "Message type:  %d\n\r", MessageType);
+  		HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
 
   		if(MessageType == ADC_SAMPLE)
   		{
-  			Message[1] = '0'; // using chars for UART not the best method.
-  			Message[2] = '0';
+  			Message[1] = 0; // using chars for UART not the best method.
+  			Message[2] = 0;
   		}
   		else if(MessageType == NO_CHANGE)
   		{
@@ -407,13 +426,14 @@ void EXTI0_1_IRQHandler(void)
 
   		for(int i = 10; i > 2; i--)
   		{
-  			Message[i] = (char) (val%2+48);
+  			Message[i] = (val%2);
   			val = val/2;
   		}
   		Message[11] = '\0'; // Terminating character
-
-  		sprintf(buffer, "Encoded Message %s\n", Message);
-  		HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
+//  		clear(buffer);
+//  		sprintf(buffer, "Message %s\n\r", ASCII(Message));
+//  		HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
+  		HAL_TIM_Base_Start_IT(&htim3);
 
   	}
 
@@ -426,6 +446,22 @@ void EXTI0_1_IRQHandler(void)
   /* USER CODE END EXTI0_1_IRQn 1 */
 }
 
+int CheckMessageType(int val){
+	//If the message count is a multiple of 10 then set the message type to CHECKPOINT
+	if ((MessageCount%10) == 0){
+
+		return CHECKPOINT;
+
+	}else{
+		// If it is not a checkpoint and the ADC value has not changed then set the MT to NO_CHANGE
+	if(val==LastMessageVal){
+
+		return NO_CHANGE;
+	}else{
+		//Else if it is not a checkpoint and the ADC value has changed set the MT to ADC_SAMPLE
+			return ADC_SAMPLE;
+		}}
+}
 
 uint32_t pollADC(void){
 	//TO DO:
@@ -440,6 +476,73 @@ uint32_t pollADC(void){
 	return val;
 }
 
+void SendData(void){
+//Send data to a GPIO pin
+
+//
+	HAL_TIM_Base_Start_IT(&htim3);
+
+  	if (MessageIndex<12){
+
+  		//If the message is a No change its length is only 3 so the timer must be disabled after 3 iterations
+  		if((MessageType == NO_CHANGE)&&(MessageIndex > 2)){
+
+  			//Turn the LED off
+  			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
+  			//Stops the timer and the interupt
+  			HAL_TIM_Base_Stop_IT(&htim3);
+
+
+  		}else{
+
+  			 //Displays the current bit to the serial monitor
+  			clear(buffer);
+  			sprintf(buffer, "Bit sent  %d\n\r", Message[MessageIndex]);
+  			HAL_UART_Transmit(&huart2, buffer, sizeof(buffer), 1000);
+  			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, Message[MessageIndex]);
+
+  			//If the previous condtions are met the Start the interrupt timer.
+
+  		}
+
+
+  	}else{
+
+//  		//turn off the led
+//  		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
+  		//Stops the timer and the interupt
+  		HAL_TIM_Base_Stop_IT(&htim3);
+  	}
+
+
+
+
+
+      	//Increases the message index
+      	MessageIndex++;
+
+}
+
+//void ASCII(char* buffer)
+//{
+//	int i = 0;
+//	while(i != 10)
+//	{
+//		buffer[i] += 48;
+//		i++;
+//	}
+//
+//}
+
+void clear(char*buffer)
+{
+	int i = 0;
+	while(buffer[i]!='\0')
+	{
+		buffer[i] = '\0';
+		i++;
+	}
+}
 
 
 /* USER CODE END 4 */
